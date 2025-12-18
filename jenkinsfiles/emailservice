@@ -1,11 +1,16 @@
 pipeline {
-    agent any 
+    agent any
 
     environment {
         AWS_REGION     = "us-east-1"
         AWS_ACCOUNT_ID = "828264807293"
         ECR_REPO       = "emailservice"
         ECR_URI        = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+
+        GIT_REPO_NAME  = "Microservices-E-Commerce-eks-project"
+        GIT_USER_NAME  = "mohammedsaqlain23"
+        GIT_EMAIL      = "mohammedsaqlain023@gmail.com"
+        YAML_FILE      = "emailservice.yaml"
     }
 
     stages {
@@ -19,7 +24,7 @@ pipeline {
         stage('Checkout from Git') {
             steps {
                 git branch: 'master',
-                    url: 'https://github.com/mohammedsaqlain23/Microservices-E-Commerce-eks-project.git'
+                    url: "https://github.com/${GIT_USER_NAME}/${GIT_REPO_NAME}.git"
             }
         }
 
@@ -27,7 +32,6 @@ pipeline {
             steps {
                 dir('src/emailservice') {
                     sh '''
-                      set -e
                       docker system prune -f
                       docker container prune -f
                       docker build -t ${ECR_REPO}:latest .
@@ -39,7 +43,6 @@ pipeline {
         stage('ECR Image Pushing') {
             steps {
                 sh '''
-                  set -e
                   aws ecr get-login-password --region ${AWS_REGION} \
                   | docker login --username AWS --password-stdin ${ECR_URI}
 
@@ -50,17 +53,14 @@ pipeline {
         }
 
         stage('Update Deployment file') {
-            environment {
-                GIT_REPO_NAME = "Microservices-E-Commerce-eks-project"
-                GIT_EMAIL     = "mohammedsaqlain023@gmail.com"
-                GIT_USER_NAME = "mohammedsaqlain23"
-                YAML_FILE     = "emailservice.yaml"
-            }
             steps {
                 dir('kubernetes-files') {
-                    withCredentials([string(credentialsId: 'my-git-pattoken', variable: 'GIT_TOKEN')]) {
+                    withCredentials([
+                        string(credentialsId: 'my-git-pattoken', variable: 'GIT_TOKEN')
+                    ]) {
                         sh '''
                           set -e
+
                           git config --global user.email "${GIT_EMAIL}"
                           git config --global user.name "${GIT_USER_NAME}"
 
@@ -68,14 +68,23 @@ pipeline {
 
                           git add ${YAML_FILE}
 
-                          # Commit only if there is a change
+                          # Commit only if file changed
                           git diff --cached --quiet || git commit -m "Update emailservice image to ${BUILD_NUMBER}"
 
-                          git push https://${GIT_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME}.git HEAD:master
+                          git push https://${GIT_TOKEN}:x-oauth-basic@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME}.git HEAD:master
                         '''
                     }
                 }
             }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ Emailservice image pushed and deployment updated successfully"
+        }
+        failure {
+            echo "❌ Pipeline failed. Check logs."
         }
     }
 }
