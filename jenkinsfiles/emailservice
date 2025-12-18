@@ -32,6 +32,7 @@ pipeline {
             steps {
                 dir('src/emailservice') {
                     sh '''
+                      set -e
                       docker system prune -f
                       docker container prune -f
                       docker build -t ${ECR_REPO}:latest .
@@ -43,6 +44,7 @@ pipeline {
         stage('ECR Image Pushing') {
             steps {
                 sh '''
+                  set -e
                   aws ecr get-login-password --region ${AWS_REGION} \
                   | docker login --username AWS --password-stdin ${ECR_URI}
 
@@ -68,10 +70,11 @@ pipeline {
 
                           git add ${YAML_FILE}
 
-                          # Commit only if file changed
+                          # Commit only if there is a change
                           git diff --cached --quiet || git commit -m "Update emailservice image to ${BUILD_NUMBER}"
 
-                          git push https://${GIT_TOKEN}:x-oauth-basic@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME}.git HEAD:master
+                          # ✅ CORRECT AUTH FORMAT
+                          git push https://${GIT_USER_NAME}:${GIT_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME}.git HEAD:master
                         '''
                     }
                 }
@@ -81,10 +84,10 @@ pipeline {
 
     post {
         success {
-            echo "✅ Emailservice image pushed and deployment updated successfully"
+            echo "✅ Emailservice pipeline completed successfully"
         }
         failure {
-            echo "❌ Pipeline failed. Check logs."
+            echo "❌ Pipeline failed – check logs"
         }
     }
 }
